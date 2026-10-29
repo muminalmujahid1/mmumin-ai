@@ -2508,7 +2508,7 @@ function setupSpeechRecognition() {
 /* Share Mumin AI using the device share sheet or copy-link fallback */
 const shareAppButton = document.getElementById("shareApp");
 shareAppButton.addEventListener("click", async () => {
-  const canonicalShareUrl = "https://muminalmujahid1.github.io/mumin-ai/";
+  const canonicalShareUrl = window.location.origin + window.location.pathname.replace(/[^/]*$/, "");
   const shareData = {
     title: "Mumin AI",
     text: "Mumin AI — Smart Solutions for a Brighter Tomorrow",
