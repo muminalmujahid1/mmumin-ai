@@ -1883,6 +1883,24 @@ body { background: #f7f8ff; }
   .attach-button { width: 34px; flex-basis: 34px; }
 }
 
+
+/* App update prompt */
+.update-banner {
+  position: fixed; z-index: 1300; top: max(10px, env(safe-area-inset-top));
+  left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 20px));
+  display: none; align-items: center; gap: 10px; padding: 11px 12px;
+  border: 1px solid rgba(12,107,79,.28); border-radius: 16px;
+  color: #12352b; background: #f4fff9; box-shadow: 0 12px 38px rgba(0,0,0,.2);
+}
+.update-banner.visible { display: flex; animation: installDrop .28s ease-out; }
+.update-banner-copy { min-width: 0; flex: 1; }
+.update-banner-copy strong { display:block; font-size:13px; }
+.update-banner-copy span { display:block; margin-top:2px; font-size:11px; opacity:.76; }
+.update-banner button { border:0; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700; }
+.update-banner-action { color:#fff; background:#087653; }
+.update-banner-close { padding:5px 8px !important; color:#45675c; background:transparent; font-size:19px !important; }
+#app[data-theme="dark"] ~ .update-banner { color:#e8fff5; background:#142a24; border-color:#315849; }
+
 </style>
 </head>
 
@@ -1895,6 +1913,15 @@ body { background: #f7f8ff; }
   <button class="install-banner-install" id="installBannerAction" type="button">Install</button>
   <button class="install-banner-close" id="installBannerClose" type="button" aria-label="বন্ধ করুন">×</button>
 </div>
+<div class="update-banner" id="updateBanner" role="status" aria-live="polite">
+  <div class="update-banner-copy">
+    <strong> Mumin AI-এর নতুন আপডেট এসেছে!</strong>
+    <span>নতুন সংস্করণ ব্যবহার করতে এখনই আপডেট করুন।</span>
+  </div>
+  <button class="update-banner-action" id="updateBannerAction" type="button">Update Now</button>
+  <button class="update-banner-close" id="updateBannerClose" type="button" aria-label="পরে আপডেট করুন">×</button>
+</div>
+
 <div class="app" id="app">
 
   <aside class="sidebar" id="sidebar" aria-label="চ্যাট হিস্টোরি">
@@ -2784,13 +2811,14 @@ async function sendMessage() {
         "সার্ভারে সমস্যা হয়েছে।"
       );
     }
-    if (typeof data.response !== "string" || !data.response.trim()) {
+    const aiReply = typeof data.response === "string" ? data.response : data.reply;
+    if (typeof aiReply !== "string" || !aiReply.trim()) {
       throw new Error("AI-এর উত্তর পাওয়া যায়নি।");
     }
 
     const targetChat = chats.find(item => item.id === chatId);
     if (targetChat) {
-      targetChat.messages.push({ role: "assistant", content: data.response });
+      targetChat.messages.push({ role: "assistant", content: aiReply });
       targetChat.messages = targetChat.messages.slice(-50);
       targetChat.updatedAt = Date.now();
     }
@@ -3270,12 +3298,65 @@ async function notifyTaskFinished(chatTitle) {
 }
 updateNotificationButton();
 
+/* PWA update flow: detect a waiting worker and let the user apply it. */
+const updateBanner = document.getElementById("updateBanner");
+const updateBannerAction = document.getElementById("updateBannerAction");
+const updateBannerClose = document.getElementById("updateBannerClose");
+let waitingWorker = null;
+let updateReloading = false;
+
+function showUpdateBanner() {
+  updateBanner.classList.add("visible");
+}
+function hideUpdateBanner() {
+  updateBanner.classList.remove("visible");
+}
+function watchForWaitingWorker(registration) {
+  if (registration.waiting && navigator.serviceWorker.controller) {
+    waitingWorker = registration.waiting;
+    showUpdateBanner();
+  }
+  registration.addEventListener("updatefound", () => {
+    const installingWorker = registration.installing;
+    if (!installingWorker) return;
+    installingWorker.addEventListener("statechange", () => {
+      if (installingWorker.state === "installed" && navigator.serviceWorker.controller) {
+        waitingWorker = registration.waiting || installingWorker;
+        showUpdateBanner();
+      }
+    });
+  });
+}
+
+updateBannerAction.addEventListener("click", () => {
+  if (!waitingWorker) {
+    showNotice("আপডেট প্রস্তুত হচ্ছে", "একটু পরে আবার চেষ্টা করুন অথবা অ্যাপটি বন্ধ করে পুনরায় খুলুন।");
+    return;
+  }
+  updateBannerAction.disabled = true;
+  updateBannerAction.textContent = "Updating…";
+  waitingWorker.postMessage({ type: "SKIP_WAITING" });
+});
+updateBannerClose.addEventListener("click", hideUpdateBanner);
+
 if ("serviceWorker" in navigator &&
     (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
   window.addEventListener("load", async () => {
     try {
-      serviceWorkerRegistration = await navigator.serviceWorker.register("./sw.js");
+      serviceWorkerRegistration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
       await navigator.serviceWorker.ready;
+      watchForWaitingWorker(serviceWorkerRegistration);
+      // Check for a newly published website version when the app opens.
+      serviceWorkerRegistration.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) serviceWorkerRegistration?.update().catch(() => {});
+      });
+      window.addEventListener("focus", () => serviceWorkerRegistration?.update().catch(() => {}));
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (updateReloading) return;
+        updateReloading = true;
+        window.location.reload();
+      });
     } catch (error) {
       console.warn("Mumin AI service worker registration failed:", error);
     }
