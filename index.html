@@ -2830,18 +2830,25 @@ async function sendMessage() {
       notifyTaskFinished(targetChat?.title || "Mumin AI");
     }
 
+  if (voiceConversationActive) {
+  try {
+    setVoiceStage("speaking");
+    await playClonedVoice(aiReply);
+
     if (voiceConversationActive) {
-      try {
-        setVoiceStage("speaking");
-        await playClonedVoice(data.response);
-        if (voiceConversationActive) setVoiceStage("listening");
-      } catch (voiceError) {
-        console.error("Mumin AI cloned voice playback failed:", voiceError);
-        if (voiceConversationActive) {
-          showNotice("ভয়েস চালানো যায়নি", "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি।");
-        }
-      }
+      setVoiceStage("listening");
     }
+  } catch (voiceError) {
+    console.error("Mumin AI cloned voice playback failed:", voiceError);
+
+    if (voiceConversationActive) {
+      showNotice(
+        "ভয়েস চালানো যায়নি",
+        "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি।"
+      );
+    }
+  }
+}
   } catch (error) {
     console.error("Mumin AI error:", error);
     transientErrors.set(chatId, error.message || "দুঃখিত, সংযোগে সমস্যা হয়েছে। আবার চেষ্টা করো।");
