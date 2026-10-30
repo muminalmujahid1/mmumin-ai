@@ -2122,6 +2122,77 @@ body { background: #f7f8ff; }
 }
 
 </style>
+
+<style id="mobile-composer-v2">
+
+/* Strong mobile-first composer layout override */
+@media screen and (max-width: 768px) {
+  .composer-area {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+  #chatForm.composer {
+    display: grid !important;
+    grid-template-columns: 44px 44px minmax(0, 1fr) 44px !important;
+    grid-template-rows: auto 44px !important;
+    grid-template-areas: "prompt prompt prompt prompt" "attach voice mic send" !important;
+    gap: 8px !important;
+    align-items: center !important;
+    padding: 10px !important;
+    min-height: 0 !important;
+    border-radius: 20px !important;
+  }
+  #chatForm #imagePicker { display: none !important; }
+  #chatForm #prompt {
+    grid-area: prompt !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    max-height: 130px !important;
+    padding: 8px 4px 10px !important;
+    margin: 0 !important;
+    border-bottom: 1px solid var(--border, #e2e0ee) !important;
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+  }
+  #chatForm .attach-button {
+    grid-area: attach !important;
+    width: 44px !important; height: 44px !important;
+    min-width: 44px !important; flex: none !important;
+    justify-self: center !important;
+    border-radius: 14px !important;
+    background: var(--hover, #f4f5fb) !important;
+    border: 1px solid var(--border, #e2e0ee) !important;
+  }
+  #chatForm .voice-chat-button {
+    grid-area: voice !important;
+    width: 44px !important; height: 44px !important;
+    min-width: 44px !important; flex: none !important;
+    justify-self: center !important;
+    border-radius: 14px !important;
+  }
+  #chatForm .mic-button {
+    grid-area: mic !important;
+    width: 44px !important; height: 44px !important;
+    min-width: 44px !important; flex: none !important;
+    justify-self: center !important;
+    border-radius: 14px !important;
+  }
+  #chatForm #send.send-button {
+    grid-area: send !important;
+    width: 44px !important; height: 44px !important;
+    min-width: 44px !important; flex: none !important;
+    justify-self: center !important;
+    border-radius: 14px !important;
+  }
+  .composer-area .disclaimer {
+    padding: 7px 4px 0 !important;
+    font-size: 10px !important;
+    text-align: center !important;
+  }
+}
+
+</style>
 </head>
 
 <body>
