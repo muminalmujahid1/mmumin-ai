@@ -1821,10 +1821,80 @@ body { background: #f7f8ff; }
   }
 }
 
+
+/* Image attachment */
+.attach-button {
+  width: 38px; height: 38px; flex: 0 0 38px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; color: var(--muted);
+  background: transparent;
+}
+.attach-button:hover { background: var(--hover); color: var(--accent); }
+.attach-button svg { width: 20px; height: 20px; }
+#imagePicker { display: none; }
+.attachment-preview {
+  display: none; width: min(760px, 100%); margin: 0 auto 8px;
+  padding: 8px 10px; align-items: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--sidebar);
+}
+.attachment-preview.visible { display: flex; }
+.attachment-preview img {
+  width: 52px; height: 52px; object-fit: cover;
+  border-radius: 9px; border: 1px solid var(--border);
+}
+.attachment-preview .attachment-name {
+  min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--text); font-size: 12px;
+}
+.attachment-remove {
+  width: 30px; height: 30px; border: 0; border-radius: 50%;
+  color: var(--muted); background: var(--hover); font-size: 19px;
+}
+.message-image {
+  display: block; max-width: min(280px, 100%); max-height: 320px;
+  object-fit: contain; margin: 0 0 9px; border-radius: 12px;
+}
+.composer { gap: 8px; }
+#app[data-theme="dark"] .attachment-preview { background: #151e30; }
+#app[data-theme="dark"] .attachment-remove { background: #29334a; color: #e5e9f5; }
+
+/* Install prompt banner */
+.install-banner {
+  position: fixed; z-index: 1200; top: max(10px, env(safe-area-inset-top));
+  left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100% - 20px));
+  display: none; align-items: center; gap: 10px;
+  padding: 11px 12px; border: 1px solid rgba(12,107,79,.2);
+  border-radius: 16px; color: #12352b; background: #f4fff9;
+  box-shadow: 0 12px 38px rgba(0,0,0,.18);
+}
+.install-banner.visible { display: flex; animation: installDrop .28s ease-out; }
+@keyframes installDrop { from { opacity: 0; transform: translate(-50%,-12px); } to { opacity: 1; transform: translate(-50%,0); } }
+.install-banner-copy { min-width: 0; flex: 1; }
+.install-banner-copy strong { display: block; font-size: 13px; }
+.install-banner-copy span { display: block; margin-top: 2px; font-size: 11px; opacity: .76; }
+.install-banner button { border: 0; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 700; }
+.install-banner-install { color: white; background: #087653; }
+.install-banner-close { padding: 5px 8px !important; color: #45675c; background: transparent; font-size: 19px !important; }
+#app[data-theme="dark"] ~ .install-banner { color: #e8fff5; background: #142a24; border-color: #315849; }
+@media (max-width: 520px) {
+  .composer { gap: 5px; padding-left: 7px; }
+  .attach-button { width: 34px; flex-basis: 34px; }
+}
+
 </style>
 </head>
 
 <body>
+<div class="install-banner" id="installBanner" role="status" aria-live="polite">
+  <div class="install-banner-copy">
+    <strong>Mumin AI অ্যাপ ইনস্টল করুন</strong>
+    <span>ফোনে অ্যাপের মতো দ্রুত ব্যবহার করুন</span>
+  </div>
+  <button class="install-banner-install" id="installBannerAction" type="button">Install</button>
+  <button class="install-banner-close" id="installBannerClose" type="button" aria-label="বন্ধ করুন">×</button>
+</div>
 <div class="app" id="app">
 
   <aside class="sidebar" id="sidebar" aria-label="চ্যাট হিস্টোরি">
@@ -1873,6 +1943,13 @@ body { background: #f7f8ff; }
       <span class="share-arrow" aria-hidden="true">↓</span>
     </button>
 
+    <button class="share-app-button" id="enableNotifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path>
+      </svg>
+      <span id="notificationButtonLabel">Enable notifications</span>
+    </button>
+
     <button class="share-app-button" id="shareApp" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="18" cy="5" r="3"></circle>
@@ -1917,7 +1994,18 @@ body { background: #f7f8ff; }
       aria-label="কথোপকথন"></main>
 
     <div class="composer-area">
+      <div class="attachment-preview" id="attachmentPreview">
+        <img id="attachmentThumbnail" alt="Selected image preview">
+        <span class="attachment-name" id="attachmentName"></span>
+        <button class="attachment-remove" id="removeAttachment" type="button" aria-label="ছবি সরান">×</button>
+      </div>
       <form class="composer" id="chatForm">
+        <input id="imagePicker" type="file" accept="image/jpeg,image/png,image/webp">
+        <button class="attach-button" id="attachImage" type="button" aria-label="ছবি যুক্ত করুন" title="ছবি যুক্ত করুন">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+        </button>
         <button class="voice-chat-button" id="voiceChatButton" type="button"
           aria-label="ভয়েসে কথা বলা শুরু করুন" title="Mumin AI-এর সঙ্গে সরাসরি ভয়েসে কথা বলুন">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1992,9 +2080,9 @@ body { background: #f7f8ff; }
 <script>
 "use strict";
 
-/* Existing Gemini Worker URL */
-const API_URL =
-  "https://mumin-ai-gemini.muminalmujahid21.workers.dev";
+/* Paste your deployed Groq Cloudflare Worker URL here.
+   Example: https://mumin-ai-groq.YOUR-SUBDOMAIN.workers.dev */
+const API_URL = "https://YOUR-GROQ-WORKER-URL.workers.dev";
 const CARTESIA_VOICE_WORKER_URL =
   "https://mumin-ai-cartesia-voice.muminalmujahid21.workers.dev/";
 let currentClonedAudio = null;
@@ -2056,6 +2144,13 @@ const themeColorMeta = document.getElementById("themeColorMeta");
 const colorSchemeMeta = document.getElementById("colorSchemeMeta");
 const micButton = document.getElementById("micButton");
 const voiceChatButton = document.getElementById("voiceChatButton");
+const imagePicker = document.getElementById("imagePicker");
+const attachImageButton = document.getElementById("attachImage");
+const attachmentPreview = document.getElementById("attachmentPreview");
+const attachmentThumbnail = document.getElementById("attachmentThumbnail");
+const attachmentName = document.getElementById("attachmentName");
+const removeAttachmentButton = document.getElementById("removeAttachment");
+let pendingImage = null;
 
 const dialogBackdrop = document.getElementById("dialogBackdrop");
 const dialogTitle = document.getElementById("dialogTitle");
@@ -2132,6 +2227,11 @@ function loadAll() {
               ["user", "assistant"].includes(message.role) &&
               typeof message.content === "string"
             )
+            .map(message => ({
+              role: message.role,
+              content: message.content,
+              ...(typeof message.imageData === "string" ? { imageData: message.imageData } : {})
+            }))
             .slice(-50),
           updatedAt: Number(item.updatedAt) || Date.now()
         }));
@@ -2380,7 +2480,18 @@ function addMessage(text, role, options = {}) {
 
   const bubble = document.createElement("div");
   bubble.className = "message " + role;
-  bubble.textContent = text;
+  if (options.imageData) {
+    const image = document.createElement("img");
+    image.className = "message-image";
+    image.src = options.imageData;
+    image.alt = "আপলোড করা ছবি";
+    bubble.appendChild(image);
+  }
+  if (text) {
+    const textNode = document.createElement("div");
+    textNode.textContent = text;
+    bubble.appendChild(textNode);
+  }
 
   if (options.error) bubble.classList.add("error");
   if (options.pending) bubble.classList.add("pending");
@@ -2478,7 +2589,8 @@ function renderChat() {
   for (const message of active.messages) {
     addMessage(
       message.content,
-      message.role === "user" ? "user" : "assistant"
+      message.role === "user" ? "user" : "assistant",
+      { imageData: message.imageData || null }
     );
   }
 
@@ -2504,7 +2616,7 @@ function updateControls() {
   const active = getActiveChat();
   const busy = Boolean(active && pendingChats.has(active.id));
 
-  sendButton.disabled = busy || !promptBox.value.trim();
+  sendButton.disabled = busy || (!promptBox.value.trim() && !pendingImage);
   promptBox.disabled = busy;
   micButton.disabled = busy;
 
@@ -2545,36 +2657,99 @@ function createNewChat() {
   promptBox.focus();
 }
 
+
+/* Image attachment: resize locally to keep requests and chat storage manageable. */
+function setPendingImage(dataUrl, fileName) {
+  pendingImage = { dataUrl, fileName };
+  attachmentThumbnail.src = dataUrl;
+  attachmentName.textContent = fileName;
+  attachmentPreview.classList.add("visible");
+  updateControls();
+}
+function clearPendingImage() {
+  pendingImage = null;
+  imagePicker.value = "";
+  attachmentThumbnail.removeAttribute("src");
+  attachmentName.textContent = "";
+  attachmentPreview.classList.remove("visible");
+  updateControls();
+}
+function resizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) {
+      reject(new Error("JPG, PNG অথবা WebP ছবি নির্বাচন করুন।"));
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      reject(new Error("ছবির সাইজ ১২ MB-এর কম রাখুন।"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("ছবিটি পড়া যায়নি।"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("ছবিটি খোলা যায়নি।"));
+      img.onload = () => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* Send message to existing Worker */
 async function sendMessage() {
   const text = promptBox.value.trim();
-  if (!text) return;
+  if (!text && !pendingImage) return;
 
   const active = getActiveChat();
-
   if (!active || pendingChats.has(active.id)) return;
 
   const chatId = active.id;
   transientErrors.delete(chatId);
 
-  if (active.messages.length === 0 &&
-      active.title === "New chat") {
-    active.title = makeTitle(text);
+  const userText = text || "এই ছবিটি ভালোভাবে বিশ্লেষণ করে বুঝিয়ে দাও।";
+  if (active.messages.length === 0 && active.title === "New chat") {
+    active.title = makeTitle(text || "ছবি বিশ্লেষণ");
   }
 
+  const imageData = pendingImage?.dataUrl || null;
   active.messages.push({
     role: "user",
-    content: text
+    content: userText,
+    ...(imageData ? { imageData } : {})
   });
-
   active.messages = active.messages.slice(-50);
   active.updatedAt = Date.now();
 
-  const requestMessages = active.messages.map(message => ({
-    role: message.role,
-    content: message.content
-  }));
+  // Send text history plus the latest attached image to the vision model.
+  const requestMessages = active.messages.map((message, index) => {
+    if (message.imageData && index === active.messages.length - 1) {
+      return {
+        role: message.role,
+        content: [
+          { type: "text", text: message.content || "এই ছবিটি বিশ্লেষণ করো।" },
+          { type: "image_url", image_url: { url: message.imageData } }
+        ]
+      };
+    }
+    return {
+      role: message.role,
+      content: message.imageData
+        ? (message.content + " [আগের বার একটি ছবি সংযুক্ত ছিল।]")
+        : message.content
+    };
+  });
 
+  clearPendingImage();
   pendingChats.add(chatId);
   if (voiceConversationActive) setVoiceStage("thinking");
 
@@ -2585,54 +2760,48 @@ async function sendMessage() {
   updateControls();
 
   try {
+    if (API_URL.includes("YOUR-GROQ-WORKER-URL")) {
+      throw new Error("প্রথমে HTML ফাইলে API_URL-এ তোমার Groq Worker-এর আসল URL বসাও।");
+    }
+
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        messages: requestMessages
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: requestMessages })
     });
 
     let data;
-
     try {
       data = await response.json();
-    } catch (error) {
+    } catch {
       throw new Error("সার্ভার থেকে সঠিক উত্তর পাওয়া যায়নি।");
     }
 
     if (!response.ok) {
       throw new Error(
-        typeof data.error === "string"
-          ? data.error
-          : "সার্ভারে সমস্যা হয়েছে।"
+        typeof data.message === "string" ? data.message :
+        typeof data.error === "string" ? data.error :
+        "সার্ভারে সমস্যা হয়েছে।"
       );
     }
-
-    if (typeof data.response !== "string" ||
-        !data.response.trim()) {
+    if (typeof data.response !== "string" || !data.response.trim()) {
       throw new Error("AI-এর উত্তর পাওয়া যায়নি।");
     }
 
     const targetChat = chats.find(item => item.id === chatId);
-
     if (targetChat) {
-      targetChat.messages.push({
-        role: "assistant",
-        content: data.response
-      });
-
+      targetChat.messages.push({ role: "assistant", content: data.response });
       targetChat.messages = targetChat.messages.slice(-50);
       targetChat.updatedAt = Date.now();
     }
-
     transientErrors.delete(chatId);
     saveAll();
 
-    // Speak only during an explicitly started voice conversation.
-    // Normal text-chat replies stay silent.
+    // Notify only if the user has enabled notifications and has left this tab.
+    if (document.hidden) {
+      notifyTaskFinished(targetChat?.title || "Mumin AI");
+    }
+
     if (voiceConversationActive) {
       try {
         setVoiceStage("speaking");
@@ -2641,27 +2810,17 @@ async function sendMessage() {
       } catch (voiceError) {
         console.error("Mumin AI cloned voice playback failed:", voiceError);
         if (voiceConversationActive) {
-          showNotice("ভয়েস চালানো যায়নি", "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি। Cartesia Worker এবং ব্রাউজারের অডিও পারমিশন পরীক্ষা করুন।");
+          showNotice("ভয়েস চালানো যায়নি", "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি।");
         }
       }
     }
-
   } catch (error) {
     console.error("Mumin AI error:", error);
-
-    transientErrors.set(
-      chatId,
-      "দুঃখিত, সংযোগে সমস্যা হয়েছে। ইন্টারনেট, Worker সার্ভার এবং Gemini API সেটিংস পরীক্ষা করে আবার চেষ্টা করো।"
-    );
-
+    transientErrors.set(chatId, error.message || "দুঃখিত, সংযোগে সমস্যা হয়েছে। আবার চেষ্টা করো।");
   } finally {
     pendingChats.delete(chatId);
     renderHistory();
-
-    if (activeChatId === chatId) {
-      renderChat();
-    }
-
+    if (activeChatId === chatId) renderChat();
     updateControls();
   }
 }
@@ -2924,6 +3083,20 @@ closeSidebarButton.addEventListener("click", closeSidebar);
 backdrop.addEventListener("click", closeSidebar);
 newChatButton.addEventListener("click", createNewChat);
 
+attachImageButton.addEventListener("click", () => imagePicker.click());
+removeAttachmentButton.addEventListener("click", clearPendingImage);
+imagePicker.addEventListener("change", async () => {
+  const file = imagePicker.files?.[0];
+  if (!file) return;
+  try {
+    const dataUrl = await resizeImageFile(file);
+    setPendingImage(dataUrl, file.name);
+  } catch (error) {
+    showNotice("ছবি যুক্ত করা যায়নি", error.message || "অন্য একটি ছবি নির্বাচন করুন।");
+    clearPendingImage();
+  }
+});
+
 chatForm.addEventListener("submit", event => {
   event.preventDefault();
   sendMessage();
@@ -2981,35 +3154,131 @@ document.addEventListener("keydown", event => {
 });
 
 
-/* Installable PWA support (HTTPS hosting required; localhost works for testing). */
+/* PWA install banner and completion notifications. */
 const installAppButton = document.getElementById("installApp");
+const installBanner = document.getElementById("installBanner");
+const installBannerAction = document.getElementById("installBannerAction");
+const installBannerClose = document.getElementById("installBannerClose");
+const enableNotificationsButton = document.getElementById("enableNotifications");
+const notificationButtonLabel = document.getElementById("notificationButtonLabel");
 let deferredInstallPrompt = null;
+let serviceWorkerRegistration = null;
+
+function isAppInstalled() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+}
+function showInstallBanner() {
+  if (isAppInstalled()) return;
+  if (sessionStorage.getItem("muminInstallBannerDismissed") === "1") return;
+  installBanner.classList.add("visible");
+}
+function hideInstallBanner() {
+  installBanner.classList.remove("visible");
+}
 window.addEventListener("beforeinstallprompt", event => {
   event.preventDefault();
   deferredInstallPrompt = event;
   installAppButton.classList.add("available");
+  installBannerAction.textContent = "Install";
+  showInstallBanner();
 });
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
   installAppButton.classList.remove("available");
+  hideInstallBanner();
   showNotice("Mumin AI ইনস্টল হয়েছে", "এখন ফোনের অ্যাপের মতো Mumin AI খুলতে পারবেন।");
 });
-installAppButton.addEventListener("click", async () => {
+async function startInstallFlow() {
+  if (isAppInstalled()) {
+    hideInstallBanner();
+    showNotice("ইনস্টল করা আছে", "Mumin AI ইতিমধ্যে অ্যাপ হিসেবে ইনস্টল করা আছে।");
+    return;
+  }
   if (!deferredInstallPrompt) {
-    showNotice("অ্যাপ ইনস্টল", "Chrome মেনু (⋮) খুলে ‘Install app’ বা ‘Add to Home screen’ বেছে নিন।");
+    showNotice("অ্যাপ ইনস্টল", "Chrome-এর ⋮ মেনু খুলে ‘Install app’ অথবা ‘Add to Home screen’ বেছে নিন। iPhone-এ Share → Add to Home Screen ব্যবহার করুন।");
     return;
   }
   deferredInstallPrompt.prompt();
   await deferredInstallPrompt.userChoice;
   deferredInstallPrompt = null;
   installAppButton.classList.remove("available");
+  hideInstallBanner();
   closeSidebar();
+}
+installAppButton.addEventListener("click", startInstallFlow);
+installBannerAction.addEventListener("click", startInstallFlow);
+installBannerClose.addEventListener("click", () => {
+  hideInstallBanner();
+  sessionStorage.setItem("muminInstallBannerDismissed", "1");
 });
-if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(error => {
-      console.warn("Mumin AI offline support could not be enabled:", error);
-    });
+if (!isAppInstalled()) {
+  window.addEventListener("load", () => setTimeout(showInstallBanner, 500));
+}
+
+function updateNotificationButton() {
+  if (!("Notification" in window)) {
+    notificationButtonLabel.textContent = "Notifications unavailable";
+    enableNotificationsButton.disabled = true;
+  } else if (Notification.permission === "granted") {
+    notificationButtonLabel.textContent = "Notifications enabled";
+  } else {
+    notificationButtonLabel.textContent = "Enable notifications";
+  }
+}
+enableNotificationsButton.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    showNotice("নোটিফিকেশন সমর্থিত নয়", "এই ব্রাউজারে নোটিফিকেশন চালু করা যাচ্ছে না।");
+    return;
+  }
+  if (Notification.permission === "granted") {
+    showNotice("নোটিফিকেশন চালু আছে", "AI-এর উত্তর তৈরি হলে এবং এই ট্যাব ব্যাকগ্রাউন্ডে থাকলে নোটিফিকেশন পাবেন।");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    showNotice("নোটিফিকেশন ব্লক করা আছে", "ব্রাউজারের Site settings থেকে Mumin AI-এর Notifications অনুমতি Allow করুন।");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  updateNotificationButton();
+  showNotice(permission === "granted" ? "নোটিফিকেশন চালু হয়েছে" : "অনুমতি দেওয়া হয়নি",
+    permission === "granted" ? "AI-এর কাজ শেষ হলে ব্যাকগ্রাউন্ডে নোটিফিকেশন পাবেন।" : "নোটিফিকেশন পেতে ব্রাউজারে অনুমতি দিতে হবে।");
+});
+async function notifyTaskFinished(chatTitle) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const registration = serviceWorkerRegistration ||
+      (await navigator.serviceWorker?.getRegistration());
+    if (registration?.showNotification) {
+      await registration.showNotification("Mumin AI — কাজ শেষ", {
+        body: `“${chatTitle}” চ্যাটের উত্তর তৈরি হয়েছে।`,
+        icon: "./icon-192.png",
+        badge: "./icon-192.png",
+        tag: "mumin-ai-task-complete",
+        renotify: true,
+        data: { url: "./" }
+      });
+    } else {
+      new Notification("Mumin AI — কাজ শেষ", {
+        body: `“${chatTitle}” চ্যাটের উত্তর তৈরি হয়েছে।`,
+        icon: "./icon-192.png"
+      });
+    }
+  } catch (error) {
+    console.warn("Task completion notification failed:", error);
+  }
+}
+updateNotificationButton();
+
+if ("serviceWorker" in navigator &&
+    (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  window.addEventListener("load", async () => {
+    try {
+      serviceWorkerRegistration = await navigator.serviceWorker.register("./sw.js");
+      await navigator.serviceWorker.ready;
+    } catch (error) {
+      console.warn("Mumin AI service worker registration failed:", error);
+    }
   });
 }
 
