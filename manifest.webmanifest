@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Mumin AI — Smart Assistant",
   "short_name": "Mumin AI",
-  "description": "Mumin AI — আপনার স্মার্ট AI সহকারী",
+  "description": "Mumin AI — আপনার স্মার্ট AI সহকার",
   "lang": "bn-BD",
   "start_url": "./",
   "scope": "./",
@@ -22,6 +22,24 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "prefer_related_applications": false,
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "shortcuts": [
+    {
+      "name": "New chat",
+      "short_name": "New chat",
+      "url": "./?new=1",
+      "icons": [
+        {
+          "src": "./icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
