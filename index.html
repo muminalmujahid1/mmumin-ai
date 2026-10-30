@@ -1901,6 +1901,27 @@ body { background: #f7f8ff; }
 .update-banner-close { padding:5px 8px !important; color:#45675c; background:transparent; font-size:19px !important; }
 #app[data-theme="dark"] ~ .update-banner { color:#e8fff5; background:#142a24; border-color:#315849; }
 
+
+/* Google account + private Firebase cloud sync */
+.mumin-account-card {
+  margin: 0 0 14px; padding: 12px; border: 1px solid var(--border);
+  border-radius: 15px; background: rgba(255,255,255,.72);
+}
+.mumin-account-info { display:flex; align-items:center; gap:10px; min-width:0; margin-bottom:10px; }
+.mumin-account-avatar { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center;
+  border-radius:50%; background:#e9f1ff; color:#4285f4; font-weight:800; overflow:hidden; }
+.mumin-account-avatar img { width:100%; height:100%; object-fit:cover; }
+.mumin-account-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.mumin-account-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:12px; }
+.mumin-account-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; }
+.mumin-google-button { width:100%; min-height:39px; display:flex; align-items:center; justify-content:center; gap:9px;
+  border:1px solid #d9deea; border-radius:10px; background:#fff; color:#303746; font-size:12px; font-weight:700; }
+.mumin-google-button:hover { background:#f7f9ff; border-color:#b9c7e3; }
+.mumin-google-g { font-family:Arial,sans-serif; font-size:17px; font-weight:800; color:#4285f4; }
+.mumin-cloud-status { display:block; margin-top:8px; color:var(--muted); font-size:10px; line-height:1.5; text-align:center; }
+#app[data-theme="dark"] .mumin-account-card { background:rgba(18,26,45,.75); border-color:var(--border); }
+#app[data-theme="dark"] .mumin-google-button { background:#f8faff; color:#303746; border-color:#d9deea; }
+
 </style>
 </head>
 
@@ -1987,6 +2008,21 @@ body { background: #f7f8ff; }
       <span>Share Mumin AI</span>
       <span class="share-arrow" aria-hidden="true">↗</span>
     </button>
+
+    <div class="mumin-account-card" id="muminAccountCard">
+      <div class="mumin-account-info">
+        <span class="mumin-account-avatar" id="muminAccountAvatar">G</span>
+        <span class="mumin-account-copy">
+          <strong id="muminAccountName">Guest account</strong>
+          <small id="muminAccountEmail">Sign in to sync your chats</small>
+        </span>
+      </div>
+      <button class="mumin-google-button" id="googleAccountButton" type="button">
+        <span class="mumin-google-g" aria-hidden="true">G</span>
+        <span id="googleAccountButtonText">Continue with Google</span>
+      </button>
+      <small class="mumin-cloud-status" id="muminCloudStatus" aria-live="polite">Chats are saved on this device</small>
+    </div>
 
     <div class="history-label">Your chats</div>
     <div class="history" id="history"></div>
@@ -2187,6 +2223,22 @@ const dialogActions = document.getElementById("dialogActions");
 let chats = [];
 let activeChatId = null;
 const pendingChats = new Set();
+
+// Firebase account and cloud-sync state. Guest chats remain local.
+const googleAccountButton = document.getElementById("googleAccountButton");
+const googleAccountButtonText = document.getElementById("googleAccountButtonText");
+const muminAccountName = document.getElementById("muminAccountName");
+const muminAccountEmail = document.getElementById("muminAccountEmail");
+const muminAccountAvatar = document.getElementById("muminAccountAvatar");
+const muminCloudStatus = document.getElementById("muminCloudStatus");
+let firebaseAuth = null;
+let firebaseDatabase = null;
+let firebaseGoogleProvider = null;
+let firebaseDbApi = null;
+let currentFirebaseUser = null;
+let cloudSyncReady = false;
+let cloudSaveTimer = null;
+let cloudSyncBusy = false;
 const transientErrors = new Map();
 
 let dialogCallback = null;
@@ -2217,16 +2269,21 @@ function getActiveChat() {
 /* Save conversations locally */
 function saveAll() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+    // Keep guest chats and each Google user's local cache separate.
+    const userSuffix = currentFirebaseUser ? "_user_" + currentFirebaseUser.uid : "";
+    const historyKey = STORAGE_KEY + userSuffix;
+    const activeKey = ACTIVE_KEY + userSuffix;
+    localStorage.setItem(historyKey, JSON.stringify(chats));
 
     if (activeChatId) {
-      localStorage.setItem(ACTIVE_KEY, activeChatId);
+      localStorage.setItem(activeKey, activeChatId);
     } else {
-      localStorage.removeItem(ACTIVE_KEY);
+      localStorage.removeItem(activeKey);
     }
   } catch (error) {
     console.warn("চ্যাট সংরক্ষণ করা যায়নি:", error);
   }
+  scheduleMuminCloudSave();
 }
 
 /* Load existing conversations */
@@ -2830,25 +2887,18 @@ async function sendMessage() {
       notifyTaskFinished(targetChat?.title || "Mumin AI");
     }
 
-  if (voiceConversationActive) {
-  try {
-    setVoiceStage("speaking");
-    await playClonedVoice(aiReply);
-
     if (voiceConversationActive) {
-      setVoiceStage("listening");
+      try {
+        setVoiceStage("speaking");
+        await playClonedVoice(aiReply);
+        if (voiceConversationActive) setVoiceStage("listening");
+      } catch (voiceError) {
+        console.error("Mumin AI cloned voice playback failed:", voiceError);
+        if (voiceConversationActive) {
+          showNotice("ভয়েস চালানো যায়নি", "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি।");
+        }
+      }
     }
-  } catch (voiceError) {
-    console.error("Mumin AI cloned voice playback failed:", voiceError);
-
-    if (voiceConversationActive) {
-      showNotice(
-        "ভয়েস চালানো যায়নি",
-        "AI উত্তর দিয়েছে, কিন্তু ক্লোন করা অডিও চালানো যায়নি।"
-      );
-    }
-  }
-}
   } catch (error) {
     console.error("Mumin AI error:", error);
     transientErrors.set(chatId, error.message || "দুঃখিত, সংযোগে সমস্যা হয়েছে। আবার চেষ্টা করো।");
@@ -3370,6 +3420,213 @@ if ("serviceWorker" in navigator &&
   });
 }
 
+/* Firebase Google sign-in + Realtime Database chat backup. */
+const MUMIN_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCvmWppuix5GSpB7Bg0LHDZqwqh3iD2c6k",
+  authDomain: "mumin-s-not.firebaseapp.com",
+  databaseURL: "https://mumin-s-not-default-rtdb.firebaseio.com",
+  projectId: "mumin-s-not",
+  storageBucket: "mumin-s-not.firebasestorage.app",
+  messagingSenderId: "779308438062",
+  appId: "1:779308438062:web:f09facedc0170fd9e645bf",
+  measurementId: "G-5G6J1E3JLV"
+};
+
+function setMuminCloudStatus(message) {
+  if (muminCloudStatus) muminCloudStatus.textContent = message;
+}
+
+function updateMuminAccountUI(user) {
+  if (!googleAccountButton) return;
+  if (user) {
+    muminAccountName.textContent = user.displayName || "Google user";
+    muminAccountEmail.textContent = user.email || "Google account connected";
+    googleAccountButtonText.textContent = "Sign out";
+    muminAccountAvatar.replaceChildren();
+    if (user.photoURL) {
+      const avatar = document.createElement("img");
+      avatar.src = user.photoURL;
+      avatar.alt = "";
+      muminAccountAvatar.appendChild(avatar);
+    } else {
+      muminAccountAvatar.textContent = (user.displayName || user.email || "G").charAt(0).toUpperCase();
+    }
+  } else {
+    muminAccountName.textContent = "Guest account";
+    muminAccountEmail.textContent = "Sign in to sync your chats";
+    googleAccountButtonText.textContent = "Continue with Google";
+    muminAccountAvatar.replaceChildren();
+    muminAccountAvatar.textContent = "G";
+  }
+}
+
+function cleanCloudChatList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(item => item && typeof item.id === "string" && Array.isArray(item.messages))
+    .map(item => ({
+      id: item.id,
+      title: typeof item.title === "string" ? item.title : "New chat",
+      messages: item.messages.filter(message => message && ["user", "assistant"].includes(message.role) && typeof message.content === "string")
+        .map(message => ({
+          role: message.role,
+          content: message.content,
+          ...(typeof message.imageData === "string" && message.imageData.length <= 150000 ? { imageData: message.imageData } : {})
+        })).slice(-50),
+      updatedAt: Number(item.updatedAt) || Date.now()
+    }));
+}
+
+function buildMuminCloudPayload() {
+  let cloudChats = chats.map(chat => ({
+    ...chat,
+    messages: chat.messages.map(message => ({
+      role: message.role,
+      content: message.content,
+      ...(typeof message.imageData === "string" && message.imageData.length <= 150000 ? { imageData: message.imageData } : {})
+    }))
+  }));
+  let payload = { chats: cloudChats, activeChatId, updatedAt: Date.now() };
+  // Keep each Realtime Database write comfortably below its request-size limit.
+  if (JSON.stringify(payload).length > 900000) {
+    cloudChats = chats.map(chat => ({
+      ...chat,
+      messages: chat.messages.map(({ role, content }) => ({ role, content }))
+    }));
+    payload = { chats: cloudChats, activeChatId, updatedAt: Date.now() };
+  }
+  return payload;
+}
+
+function scheduleMuminCloudSave() {
+  if (!currentFirebaseUser || !firebaseDatabase || !firebaseDbApi || !cloudSyncReady || cloudSyncBusy) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    try {
+      const cloudPath = `users/${currentFirebaseUser.uid}/muminAI`;
+      await firebaseDbApi.set(firebaseDbApi.ref(firebaseDatabase, cloudPath), buildMuminCloudPayload());
+      setMuminCloudStatus("আপনার চ্যাট Google Account-এ সেভ হয়েছে");
+    } catch (error) {
+      console.error("Mumin AI cloud save failed:", error);
+      setMuminCloudStatus("Cloud sync হয়নি — Firebase Rules পরীক্ষা করুন");
+    }
+  }, 800);
+}
+
+async function loadMuminCloudChats(user) {
+  cloudSyncReady = false;
+  cloudSyncBusy = true;
+  setMuminCloudStatus("আপনার Cloud Chat লোড হচ্ছে…");
+  try {
+    const cloudPath = `users/${user.uid}/muminAI`;
+    const snapshot = await firebaseDbApi.get(firebaseDbApi.ref(firebaseDatabase, cloudPath));
+    const cloudData = snapshot.exists() ? snapshot.val() : null;
+    const cloudChats = cleanCloudChatList(cloudData?.chats);
+    let localChats = cleanCloudChatList(chats);
+    try {
+      const accountCache = localStorage.getItem(STORAGE_KEY + "_user_" + user.uid);
+      if (accountCache) {
+        const parsedAccountCache = JSON.parse(accountCache);
+        if (Array.isArray(parsedAccountCache)) localChats = cleanCloudChatList(parsedAccountCache);
+      }
+    } catch (cacheError) {
+      console.warn("Account-specific local chat cache could not be read:", cacheError);
+    }
+    const merged = new Map();
+    for (const item of cloudChats) merged.set(item.id, item);
+    for (const item of localChats) {
+      const old = merged.get(item.id);
+      if (!old || item.updatedAt >= old.updatedAt) merged.set(item.id, item);
+    }
+    chats = Array.from(merged.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+    const cloudActiveId = cloudData?.activeChatId;
+    if (chats.some(item => item.id === activeChatId)) {
+      // Keep the currently selected local chat when it is still available.
+    } else if (chats.some(item => item.id === cloudActiveId)) {
+      activeChatId = cloudActiveId;
+    } else {
+      activeChatId = chats[0]?.id || null;
+    }
+    if (!chats.length) {
+      const first = createChat();
+      chats.push(first);
+      activeChatId = first.id;
+    }
+    cloudSyncReady = true;
+    cloudSyncBusy = false;
+    saveAll();
+    renderHistory();
+    renderChat();
+    updateControls();
+    setMuminCloudStatus(cloudChats.length ? "Cloud Chat sync সম্পন্ন হয়েছে" : "Google Account-এ Cloud Backup চালু হয়েছে");
+  } catch (error) {
+    cloudSyncBusy = false;
+    cloudSyncReady = false;
+    console.error("Mumin AI cloud load failed:", error);
+    setMuminCloudStatus("Cloud Sync ব্যর্থ — Firebase Database Rules পরীক্ষা করুন");
+    showNotice("Cloud Sync চালু হয়নি", "Firebase Realtime Database Rules এবং Google sign-in সেটিংস পরীক্ষা করুন।");
+  }
+}
+
+async function initMuminFirebaseAccount() {
+  try {
+    const [appSdk, authSdk, databaseSdk] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js")
+    ]);
+    const firebaseApp = appSdk.initializeApp(MUMIN_FIREBASE_CONFIG);
+    firebaseAuth = authSdk.getAuth(firebaseApp);
+    firebaseDatabase = databaseSdk.getDatabase(firebaseApp);
+    firebaseGoogleProvider = new authSdk.GoogleAuthProvider();
+    firebaseDbApi = databaseSdk;
+
+    googleAccountButton.addEventListener("click", async () => {
+      googleAccountButton.disabled = true;
+      try {
+        if (firebaseAuth.currentUser) {
+          await authSdk.signOut(firebaseAuth);
+        } else {
+          await authSdk.signInWithPopup(firebaseAuth, firebaseGoogleProvider);
+        }
+      } catch (error) {
+        console.error("Google account action failed:", error);
+        const message = error.code === "auth/unauthorized-domain"
+          ? "Firebase Authentication → Settings → Authorized domains-এ muminalmujahid1.github.io যোগ করুন।"
+          : error.code === "auth/popup-blocked"
+            ? "ব্রাউজার Google sign-in popup ব্লক করেছে। Popup allow করে আবার চেষ্টা করুন।"
+            : error.code === "auth/operation-not-allowed"
+              ? "Firebase Authentication-এ Google provider enable করুন।"
+              : (error.message || "Google sign-in সম্পন্ন হয়নি।");
+        showNotice("Google Account সমস্যা", message);
+      } finally {
+        googleAccountButton.disabled = false;
+      }
+    });
+
+    authSdk.onAuthStateChanged(firebaseAuth, async user => {
+      currentFirebaseUser = user || null;
+      cloudSyncReady = false;
+      updateMuminAccountUI(user);
+      if (user) {
+        await loadMuminCloudChats(user);
+      } else {
+        clearTimeout(cloudSaveTimer);
+        // Return to the guest's own local history after signing out.
+        loadAll();
+        renderHistory();
+        renderChat();
+        updateControls();
+        setMuminCloudStatus("Chats are saved on this device");
+      }
+    });
+  } catch (error) {
+    console.error("Firebase initialization failed:", error);
+    setMuminCloudStatus("Google Account service লোড হয়নি");
+    googleAccountButton.disabled = true;
+    googleAccountButtonText.textContent = "Sign-in unavailable";
+  }
+}
+
 /* Start application */
 initTheme();
 setupSpeechRecognition();
@@ -3377,6 +3634,7 @@ loadAll();
 renderHistory();
 renderChat();
 updateControls();
+initMuminFirebaseAccount();
 </script>
 </body>
 </html>
