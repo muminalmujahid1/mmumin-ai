@@ -2036,6 +2036,92 @@ body { background: #f7f8ff; }
 }
 
 </style>
+<style>
+
+/* Mobile composer refinement: separate writing space from action buttons */
+@media (max-width: 520px) {
+  .composer-area {
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to bottom, rgba(248,249,255,.92), rgba(248,249,255,.99));
+  }
+  .composer {
+    display: grid;
+    grid-template-columns: 40px 40px minmax(0, 1fr) 40px;
+    grid-template-areas:
+      "prompt prompt prompt prompt"
+      "attach voice mic send";
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px;
+    border-radius: 22px;
+    background: #fff;
+    border: 1px solid rgba(135,139,176,.25);
+    box-shadow: 0 7px 24px rgba(42,45,90,.09);
+  }
+  #imagePicker { display: none !important; }
+  #prompt {
+    grid-area: prompt;
+    width: 100%;
+    min-height: 44px;
+    max-height: 132px;
+    padding: 9px 5px 10px;
+    border-bottom: 1px solid rgba(135,139,176,.16);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .attach-button {
+    grid-area: attach;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border: 1px solid rgba(135,139,176,.16);
+    border-radius: 14px;
+    background: #f5f6fc;
+    color: #646b83;
+  }
+  .attach-button svg { width: 21px; height: 21px; }
+  .voice-chat-button {
+    grid-area: voice;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    justify-content: center;
+    border-radius: 14px !important;
+  }
+  .voice-chat-button::after { content: none !important; display: none !important; }
+  .mic-button {
+    grid-area: mic;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+  .send-button {
+    grid-area: send;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+  .attach-button:hover, .voice-chat-button:hover:not(:disabled),
+  .mic-button:hover:not(:disabled) { transform: translateY(-1px); }
+  .disclaimer { padding-top: 7px; font-size: 10px; }
+  #app[data-theme="dark"] .composer-area {
+    background: linear-gradient(to bottom, rgba(13,18,34,.82), rgba(13,18,34,.99));
+  }
+  #app[data-theme="dark"] .composer {
+    background: rgba(22,29,49,.98);
+    border-color: rgba(145,159,205,.25);
+  }
+  #app[data-theme="dark"] #prompt { border-bottom-color: rgba(145,159,205,.18); }
+  #app[data-theme="dark"] .attach-button {
+    background: #202944;
+    border-color: rgba(145,159,205,.18);
+    color: #c6d0f4;
+  }
+}
+
+</style>
 </head>
 
 <body>
